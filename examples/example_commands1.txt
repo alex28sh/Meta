@@ -1,0 +1,32 @@
+inputs TM:
+
+C nil []
+C nil []
+
+
+C "nil" []
+C "cons" [C "z" [], C "nil" []]
+
+C "cons" [C "write" [C "z" []], C "nil" []]
+C "cons" [C "z" [], C "nil" []]
+
+
+C "cons" [C "right" [], C "nil" []]
+C "cons" [C "z" [], C "nil" []]
+
+
+C "cons" [C "right" [], C "cons" [C "left" [], C "nil" []]]
+C "cons" [C "z" [], C "nil" []]
+
+C "cons" [C "gotoI" [C "succ" [C "succ" [C "zero" []]]], C "cons" [C "left" [], C "cons" [C "right" [], C "nil" []]]]
+C "cons" [C "z" [], C "nil" []]
+
+C "cons" [C "gotoI" [C "succ" [C "succ" [C "zero" []]]], C "cons" [C "left" [], C "cons" [C "right" [], C "nil" []]]]
+C "cons" [C "z" [], C "nil" []]
+
+C "cons" [C "ifI" [C "z" [], C "succ" [C "succ" [C "zero" []]]], C "cons" [C "write" [C "succ" [C "z" []]], C "cons" [C "right" [], C "nil" []]]]
+C "cons" [C "z" [], C "nil" []]
+-- C "nil" []
+
+C "cons" [C "ifI" [C "succ" [C "z" []], C "succ" [C "succ" [C "zero" []]]], C "cons" [C "write" [C "succ" [C "z" []]], C "cons" [C "right" [], C "nil" []]]]
+C "cons" [C "z" [], C "nil" []]
