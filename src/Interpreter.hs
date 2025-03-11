@@ -1,7 +1,7 @@
 module Interpreter where 
 
 import Control.Monad.State
-    ( modify, evalStateT, MonadState(get), MonadTrans(lift), StateT)
+    ( modify, evalStateT, MonadState(get, put), MonadTrans(lift), StateT)
 import Control.Monad.Trans.Except ( runExceptT, throwE, ExceptT ) 
 import Control.Monad.Except (catchError)
 import Control.Monad (when)
@@ -12,10 +12,15 @@ import Text.Read (readMaybe)
 import Control.Arrow (first)
 import Syntax
 
+import Text.Megaparsec (runParser)
+import Parser (parseExpr)
+
 type VarMap = M.Map String Expr
 type BlockMap = M.Map String Block 
+type LabelCounter = Int
+type LabelMap = M.Map (String, Expr) LabelCounter
 
-type EvalM = StateT (VarMap, BlockMap) (ExceptT Error IO)
+type EvalM = StateT (VarMap, BlockMap, LabelMap, LabelCounter) (ExceptT Error IO)
 
 data Error 
     = UndefinedVar String
@@ -26,28 +31,42 @@ data Error
     deriving (Show, Eq)
 
 modifyVar :: String -> Expr -> EvalM ()
-modifyVar s e = modify (first $ M.insert s e)
+modifyVar s e = do 
+    (vars, blocks, labels, counter) <- get 
+    put (M.insert s e vars, blocks, labels, counter)
     
 getVar :: String -> EvalM Expr
 getVar s = do 
-    (vars, _) <- get 
+    (vars, _, _, _) <- get 
     when (M.notMember s vars) $ lift (throwE $ UndefinedVar s)
     return $ vars M.! s
 
 getBlock :: String -> EvalM Block
 getBlock s = do 
-    (_, labels) <- get 
-    when (M.notMember s labels) $ lift (throwE $ UndefinedLabel s)
-    return $ labels M.! s
+    (_, blocks, _, _) <- get 
+    when (M.notMember s blocks) $ lift (throwE $ UndefinedLabel s)
+    return $ blocks M.! s
 
-readSafe :: (Read a, MonadTrans t, Monad m, Monad (t (ExceptT Error m))) => String -> t (ExceptT Error m) a
-readSafe str =
-  case readMaybe str of
-    Just n -> return n
-    Nothing -> lift $ throwE $ ParsingErr str
+readSafe :: (MonadTrans t, Monad m, Monad (t (ExceptT Error m))) => String -> t (ExceptT Error m) Expr
+readSafe str = 
+    case runParser parseExpr "" str of
+        Left err ->
+            lift $ throwE $ ParsingErr str
+        Right term -> 
+            return term
 
 interAssign :: Stmt -> EvalM ()
 interAssign (Assignment v e) = evalExpr e >>= modifyVar v 
+
+getNewLabel :: String -> Expr -> EvalM String 
+getNewLabel lab vs = do 
+    (vars, blocks, labels, counter) <- get
+    if (M.member (lab, vs) labels) then
+        return $ lab ++ show (labels M.! (lab, vs))
+    else do
+        put (vars, blocks, M.insert (lab, vs) counter labels, counter + 1)  
+        return $ lab ++ show counter
+
 
 evalExpr :: Expr -> EvalM Expr
 evalExpr (V x) = getVar x 
@@ -58,50 +77,103 @@ evalExpr (Call name es)
         vals <- mapM evalExpr es 
         when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
         let e = head vals 
-        let vs = head $ tail vals
+        let vs = vals !! 1
         return $ reduce vs e
     | name == "update" = do 
         vals <- mapM evalExpr es 
         when (length vals /= 3) $ lift $ throwE WrongNumberOfArgs
         let vs = head vals 
-        let x = head $ tail vals
-        let val = head $ tail $ tail vals
+        let (C "var" [x]) = vals !! 1
+        let val = vals !! 2      
         return $ update vs x val
     | name == "is_static" = do 
         vals <- mapM evalExpr es 
         when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
         let vs = head vals 
-        let x = head $ tail vals 
+        let x = vals !! 1
         return $ 
             if isStatic vs x 
             then 
                 C "True" [] 
             else 
                 C "False" []
-    | name == "extend" = undefined 
-    | name == "initial_code" = undefined 
-    | name == "get_label" = undefined 
-    | name == "match_eval" = undefined 
-    | name == "match_fits" = undefined 
+    | name == "extend" = do
+        vals <- mapM evalExpr es 
+        when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
+        let block@(C name [label, assigns]) = head vals 
+        let stmt@(C name_stmt args) = vals !! 1
+        case name_stmt of 
+            "Assign" -> return $ C name [label, extend_list assigns stmt]
+            _ -> return $ C name [label, assigns, stmt]
+    | name == "initial_code" = do 
+        vals <- mapM evalExpr es 
+        when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
+        let (C lab []) = head vals 
+        let vs = vals !! 1
+        label <- getNewLabel lab vs
+        return $ C "Block" [C label [], C "nil" []]
+    | name == "get_label" = do 
+        vals <- mapM evalExpr es 
+        when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
+        let (C lab []) = head vals
+        let v = vals !! 1
+        C <$> getNewLabel lab v <*> pure []
+    | name == "match_eval" = do 
+        vals <- mapM evalExpr es 
+        when (length vals /= 3) $ lift $ throwE WrongNumberOfArgs
+        let e = vals !! 1
+        let vs = vals !! 2
+        let v_val = reduce vs $ head vals 
+        return $ match_eval vs v_val e
+    | name == "match_fits" = do 
+        vals <- mapM evalExpr es 
+        when (length vals /= 3) $ lift $ throwE WrongNumberOfArgs
+        let e = vals !! 1
+        let vs = vals !! 2
+        let v_val = reduce vs $ head vals 
+        lift $ lift $ print "match_fits:"
+        lift $ lift $ print e
+        lift $ lift $ print v_val
+        lift $ lift $ print vs
+        if match_fits v_val e 
+        then 
+            return $ C "True" []
+        else 
+            return $ C "False" []
     | otherwise = 
         lift (throwE $ UndefinedBuiltin name)  
 
+match_eval :: Expr -> Expr -> Expr -> Expr
+match_eval vs val@(C _ _) (C "var" [v]) =  
+    update vs v val 
+match_eval vs (C name1 args1) (C name2 args2) = 
+    foldl (\vs -> uncurry $ match_eval vs) vs (zip args1 args2)
+
+match_fits :: Expr -> Expr -> Bool
+match_fits (C _ _) (C "var" [_])  = True 
+match_fits (C name1 args1) (C name2 args2) = 
+    name1 == name2 && length args1 == length args2 && all (uncurry match_fits) (zip args1 args2)
+
+extend_list :: Expr -> Expr -> Expr
+extend_list (C "nil" []) e = C "cons" [e, C "nil" []]
+extend_list (C "cons" [hd, tl]) e = C "cons" [hd, extend_list tl e]
+
 isStatic :: Expr -> Expr -> Bool 
-isStatic exprs (C _ args) = all (isStatic exprs) args
-isStatic exprs (Call _ args) = all (isStatic exprs) args
-isStatic exprs v@(V _) = find exprs 
+isStatic exprs (C "var" [v]) = find exprs 
     where
         find :: Expr -> Bool 
         find (C "nil" []) = False 
         find (C "cons" [name, rest]) | name == v = True 
                                      | otherwise = find rest  
         find _ = undefined 
+isStatic exprs (C _ args) = all (isStatic exprs) args
+isStatic exprs (Call _ args) = all (isStatic exprs) args
 
 reduce :: Expr -> Expr ->  Expr
-reduce vs v@(V _) = find vs
+reduce vs (C "var" [v]) = find vs
     where
         find :: Expr -> Expr 
-        find (C "nil" []) = v 
+        find (C "nil" []) = C "var" [v] 
         find (C "cons" [C "Pair" [name, val], rest]) | name == v = val 
                                                      | otherwise = find rest  
         find _ = undefined 
@@ -137,10 +209,10 @@ interJump (Match v (MatchExpr name lst) l r) = do
 
 interRead :: ReadI -> EvalM ()
 interRead (ReadI s) = 
-    (lift (lift getLine) >>= readSafe) >>= modifyVar s
+    (lift (lift $ putStrLn ("input value for " ++ s) >> getLine) >>= readSafe) >>= modifyVar s
 
 interBlock :: Block -> EvalM Expr
-interBlock (Block (Label label) assigns jump) = lift (lift $ putStrLn label) >> 
+interBlock (Block (Label label) assigns jump) = -- (getVar "Left" >>= \s -> lift $ lift $ when (label == "loop") $ print s) >> 
     mapM_ interAssign assigns >> interJump jump
 
 interProg :: Program -> EvalM Expr
@@ -148,7 +220,7 @@ interProg (Program reads blocks) = mapM_ interRead reads >> interBlock (head blo
 
 interProgTop :: Program -> IO ()
 interProgTop pr@(Program _ blocks) = do 
-    result <- runExceptT (evalStateT (interProg pr) (M.empty, M.fromList $ map (\b@(Block (Label label) _ _) -> (label, b)) blocks))
+    result <- runExceptT (evalStateT (interProg pr) (M.empty, M.fromList $ map (\b@(Block (Label label) _ _) -> (label, b)) blocks, M.empty, 0))
     case result of
         Left err -> print err
         Right x -> putStrLn $ printf "Result: %s" (show x)

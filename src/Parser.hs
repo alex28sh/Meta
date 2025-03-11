@@ -9,7 +9,7 @@ import Lexer
 
 
 reserved :: [String]
-reserved = ["match", "if", "label", "goto", "C", "return", "jump", "read"]
+reserved = ["match", "if", "label", "goto", "C", "return", "read"]
 
 ident :: Parser String
 ident = lIdentifier reserved
@@ -19,7 +19,7 @@ commaSep p = sepBy p comma
 
 parseExpr :: Parser Expr
 parseExpr = 
-        try parseVar <|> try parseConstruct <|> try parseExprBr <|> parseCall
+        try parseCall <|> try parseConstruct <|> try parseExprBr <|> parseVar
     where 
         parseVar, parseConstruct, parseExprBr, parseCall :: Parser Expr
         parseVar = V <$> ident 
@@ -34,9 +34,9 @@ parseJump =
         parseGoto = symbol "goto" >> Goto <$> ident
         parseIf = do 
             symbol "if" 
-            l <- parseExpr
-            op <- parseOp
-            r <- parseExpr 
+            l <- try parseExpr
+            op <- try parseOp
+            r <- try parseExpr 
             If op l r <$> (symbol "goto" >> ident) <*> (symbol "else" >> ident)
         parseOp = sc *> (try (symbol "==" >> return Eq) <|> (symbol "/=" >> return Neq))
         parseReturn = symbol "return" >> Return <$> parseExpr

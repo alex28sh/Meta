@@ -27,8 +27,8 @@ library
   exposed-modules:
       Interpreter
       Lexer
-      Lib
       Parser
+      PrintTermToPrg
       Syntax
   other-modules:
       Paths_Meta1
@@ -49,12 +49,44 @@ library
     , utility-ht
   default-language: Haskell2010
 
-executable Meta1-exe
+executable main-exe
   main-is: Main.hs
-  other-modules:
-      Paths_Meta1
-  autogen-modules:
-      Paths_Meta1
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Meta1
+    , base >=4.7 && <5
+    , composition
+    , containers
+    , megaparsec
+    , mtl
+    , parsec
+    , parser-combinators
+    , transformers
+    , utility-ht
+  default-language: Haskell2010
+
+executable print-exe
+  main-is: PrintData.hs
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Meta1
+    , base >=4.7 && <5
+    , composition
+    , containers
+    , megaparsec
+    , mtl
+    , parsec
+    , parser-combinators
+    , transformers
+    , utility-ht
+  default-language: Haskell2010
+
+executable term-to-prg-exe
+  main-is: TermToPrg.hs
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
