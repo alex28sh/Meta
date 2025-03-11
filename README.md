@@ -13,7 +13,7 @@ For the representation of constants and 'operations' I used S-expressions:
 
 [TM](/examples/TM.frt) - implemented TM 
 
-[TM reduced](/examples/TM_reduced.frt)) - TM specialized on 
+[TM reduced](/examples/TM_reduced.frt) - TM specialized on 
 
 `ifI 0 2; write 1; right`
 
