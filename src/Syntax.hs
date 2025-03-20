@@ -48,7 +48,7 @@ class DataPrintable a where
     printData :: a -> String
 
 instance {-# OVERLAPPING #-} DataPrintable String where
-    printData s = "C " ++ s ++ " []"
+    printData s = "C " ++ s ++ "spec []"
 
 instance DataPrintable Program where
     printData (Program reads blocks) = 
@@ -75,7 +75,7 @@ instance DataPrintable Jump where
 instance DataPrintable Expr where
     printData (V s) = "C var [" ++ printData s ++ "]"
     printData (C s es) = "C " ++ s ++ " [ " ++ intercalate ", " (map printData es) ++ " ]"
-    printData (Call s es) = undefined
+    printData (Call s es) = "C Call [ " ++ "C " ++ s ++ " []" ++ ", " ++ intercalate ", " (map printData es) ++ " ]"
 
 instance DataPrintable a => DataPrintable [a] where
     printData [] = "C nil []"

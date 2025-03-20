@@ -10,12 +10,12 @@ label init:
 label loopReads:
     Reads match (C cons [curRead, ReadsTail]) goto loopReads1 else initDone;
 label loopReads1:
-    curRead match (C ReadI [CurFind]) goto loopReads3 else ErrPattern;
+    curRead match (C ReadI [readVar]) goto loopReads3 else ErrPattern;
 label loopReads3:
     Reads := ReadsTail;
-    if is_static(Division, CurFind) == (C True []) goto loopReads else loopReadsNotFound;
+    if is_static(Division, readVar) == (C True []) goto loopReads else loopReadsNotFound;
 label loopReadsNotFound:
-    NewReads := C cons [C ReadI [CurFind], NewReads];
+    NewReads := C cons [C ReadI [readVar], NewReads];
     goto loopReads;
 
 label initDone:
@@ -40,16 +40,16 @@ label loopPending2_1:
     if found == (C True []) goto loopPending else loopPending2;
 label loopPending2:
     marked := C cons [C Pair [pp, vs], marked];
-    CurList := Blocks; 
-    CurFind := pp;
-    CurRa := C loopPending3 [];
+    CurListBlock := Blocks; 
+    CurFindBlock := pp;
+    CurRaBlock := C loopPending3 [];
     goto lookupBlock;
 label loopPending3: 
     code := initial_code(pp, vs);
     goto loopBB;
 
 label loopBB:
-    assings match (C cons [curAssign, restAssigns]) goto loopBB_ else processJump;  
+    assigns match (C cons [curAssign, restAssigns]) goto loopBB_ else processJump;  
 
 label processJump:
     jump match (C Goto [GotoLab]) goto processGoto else processJump1;
@@ -61,9 +61,9 @@ label processJump3:
     jump match (C Return [expr]) goto processReturn else ErrPattern;
 
 label processGoto:
-    CurList := Blocks; 
-    CurFind := GotoLab;
-    CurRa := C loopBB [];
+    CurListBlock := Blocks; 
+    CurFindBlock := GotoLab;
+    CurRaBlock := C loopBB [];
     goto lookupBlock;
 
 label processIf:
@@ -90,9 +90,9 @@ label processIfDynamic:
     goto end_pending_loop;
 
 label processMatch:
+    v_val := reduce(v, vs);
     if (C True []) == is_static(Division, v) goto processMatchStatic else processMatchDynamic;
 label processMatchStatic:
-    v_val := reduce(v, vs);
     if match_fits(v_val, e, vs) == (C True []) goto processMatchStaticTrue else processMatchStaticFalse;
 label processMatchStaticTrue:
     vs := match_eval(v_val, e, vs);
@@ -105,7 +105,7 @@ label processMatchStaticFalse:
 label processMatchDynamic:
     pending := C cons [C Pair [l, vs], pending];
     pending := C cons [C Pair [r, vs], pending];
-    code := extend(code, C Match [v, e, get_label(l, vs), get_label(r, vs)]);
+    code := extend(code, C Match [v_val, e, get_label(l, vs), get_label(r, vs)]);
     goto end_pending_loop;
 
 
@@ -115,16 +115,16 @@ label processReturn:
     goto end_pending_loop;
 
 label loopBB_:
-    assings := restAssigns;
-    curAssign match (C Assign [x, expr]) goto processAssign else ErrPattern;
+    assigns := restAssigns;
+    curAssign match (C Assign [x, exprAss]) goto processAssign else ErrPattern;
 label processAssign:
     if is_static(Division, x) == (C True []) goto processAssign2 else processAssign3;
 label processAssign2:
-    val := reduce(expr, vs);
+    val := reduce(exprAss, vs);
     vs := update(vs, x, val);
     goto loopBB;
 label processAssign3:
-    val := reduce(expr, vs);
+    val := reduce(exprAss, vs);
     code := extend(code, C Assign [x, val]);
     goto loopBB;
 
@@ -135,18 +135,18 @@ label end_pending_loop:
 
 
 label lookupBlock:
-    CurList match (C cons [CurElem, CurListTail]) goto lookupBlockCheck else ErrPattern;
+    CurListBlock match (C cons [CurElemBlock, CurListTailBlock]) goto lookupBlockCheck else ErrPattern;
 label lookupBlockCheck:
-    CurElem match (C Block [CurLab, assings, jump]) goto lookupBlockCheck_ else ErrPattern;
+    CurElemBlock match (C Block [CurLab, assigns, jump]) goto lookupBlockCheck_ else ErrPattern;
 label lookupBlockCheck_:
-    if CurLab == CurFind goto lookupBlockReturn else lookupBlockNext;
+    if CurLab == CurFindBlock goto lookupBlockReturn else lookupBlockNext;
 label lookupBlockNext:
-    CurList := CurListTail;
+    CurListBlock := CurListTailBlock;
     goto lookupBlock;
 label lookupBlockReturn:
-    if CurRa == (C loopPending3 []) goto loopPending3 else lookupBlockReturn1;
+    if CurRaBlock == (C loopPending3 []) goto loopPending3 else lookupBlockReturn1;
 label lookupBlockReturn1:
-    if CurRa == (C loopBB []) goto loopBB else lookupBlockReturn2;
+    if CurRaBlock == (C loopBB []) goto loopBB else lookupBlockReturn2;
 label lookupBlockReturn2:
     goto ErrPattern;
 

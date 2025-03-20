@@ -46,4 +46,5 @@ printTermToOp (C "Neq" []) = "/="
 
 printTermToExpr :: Expr -> String
 printTermToExpr v@(C "var" _) = printTermToVar v
+printTermToExpr (C "Call" ((C name []) : es)) = name ++ "(" ++ intercalate ", " (map printTermToExpr es) ++ ")"
 printTermToExpr (C name es) = "C " ++ name ++ " [" ++ intercalate ", " (map printTermToExpr es) ++ "]"

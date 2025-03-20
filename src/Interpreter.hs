@@ -123,6 +123,7 @@ evalExpr (Call name es)
         when (length vals /= 3) $ lift $ throwE WrongNumberOfArgs
         let e = vals !! 1
         let vs = vals !! 2
+        -- when (not $ isStatic vs $ head vals) $ lift $ throwE $ ParsingErr "match_eval: not static"
         let v_val = reduce vs $ head vals 
         return $ match_eval vs v_val e
     | name == "match_fits" = do 
@@ -130,11 +131,8 @@ evalExpr (Call name es)
         when (length vals /= 3) $ lift $ throwE WrongNumberOfArgs
         let e = vals !! 1
         let vs = vals !! 2
+        -- when (not $ isStatic vs $ head vals) $ lift $ throwE $ ParsingErr "match_fits: not static"
         let v_val = reduce vs $ head vals 
-        lift $ lift $ print "match_fits:"
-        lift $ lift $ print e
-        lift $ lift $ print v_val
-        lift $ lift $ print vs
         if match_fits v_val e 
         then 
             return $ C "True" []
@@ -177,6 +175,56 @@ reduce vs (C "var" [v]) = find vs
         find (C "cons" [C "Pair" [name, val], rest]) | name == v = val 
                                                      | otherwise = find rest  
         find _ = undefined 
+reduce vs (C "Call" es) = 
+    case all (isStatic vs) es of 
+        True -> reduce_helper vs es
+        False -> C "Call" $ map (reduce vs) es
+    where 
+        reduce_helper :: Expr -> [Expr] -> Expr
+        reduce_helper vs es 
+            | length es == 3 && head es == (C "reduce" []) =
+                let [e, vs0] = tail $ map (reduce vs) es in
+                reduce vs0 e
+            | length es == 4 && head es == (C "update" []) = 
+                let [vs0, (C "var" [x]), val] = tail $ map (reduce vs) es in
+                update vs0 x val
+            | length es == 3 && head es == (C "is_static" []) = 
+                let [vs0, x] = tail $ map (reduce vs) es in
+                if isStatic vs0 x 
+                    then 
+                        C "True" [] 
+                    else 
+                        C "False" []
+            | length es == 3 && head es == (C "extend" []) = 
+                let vals = map (reduce vs) $ tail es in
+                let [block@(C name [label, assigns]), stmt] = vals in
+                case stmt of 
+                    (C "Assign" [v, e]) -> extend_list assigns stmt
+                    _ -> C name [label, assigns, stmt]
+            | length es == 3 && head es == (C "initial_code" []) = 
+                undefined
+                -- let [lab, vs0] = map (reduce vs) $ tail es in
+                -- let label = getNewLabel lab vs0 in
+                -- C "Block" [C label [], C "nil" []]
+            | length es == 3 && head es == (C "get_label" []) =
+                undefined
+                -- let [lab, v] = map (reduce vs) $ tail es in
+                -- getNewLabel lab v  
+            | length es == 4 && head es == (C "match_eval" []) =
+                let [e, vs0, v_val] = map (reduce vs) $ tail es in
+                match_eval vs0 (reduce vs0 v_val) e  
+            | length es == 4 && head es == (C "match_fits" []) =  
+                let [e, vs0, v_val] = map (reduce vs) $ tail es in
+                if match_fits (reduce vs0 v_val) e 
+                then 
+                    C "True" []
+                else 
+                    C "False" []
+            | otherwise = error $ show es
+        -- find :: Expr -> Expr -> Expr 
+        -- find (C "cons" [C "Pair" [name, val], rest]) var@(C "var" [v]) | name == v = val 
+        --                                                                | otherwise = find rest var  
+        -- find _ _ = undefined 
 reduce vs (C name es) = 
     C name $ map (reduce vs) es
 reduce _ _ = undefined
