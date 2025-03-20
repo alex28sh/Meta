@@ -8,12 +8,12 @@ For the representation of constants and 'operations' I used S-expressions:
 * $op(a_1, a_2... a_n)$ $\rightarrow$ $C\ op\ [a_1, a_2.. a_n]$
 
 
-[/home/aleksandr/Meta/examples/mix.frt](mix) - implemented mixer (still didn't add support for builtin calls ==> second projection doesn't work) 
+[mix](/examples/mix.frt) - implemented mixer (still didn't add support for builtin calls ==> second projection doesn't work) 
 
 
-[/home/aleksandr/Meta/examples/TM.frt](TM) - implemented TM 
+[TM](/examples/TM.frt) - implemented TM 
 
-[/home/aleksandr/Meta/examples/TM_reduced.frt](TM_reduced) - TM specialized on 
+[TM reduced](/examples/TM_reduced.frt) - TM specialized on 
 
 `ifI 0 2; write 1; right`
 
