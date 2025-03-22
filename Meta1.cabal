@@ -27,6 +27,7 @@ library
   exposed-modules:
       Interpreter
       Lexer
+      LivenessAnalysis
       Parser
       PrintTermToPrg
       Syntax
@@ -42,6 +43,7 @@ library
     , composition
     , containers
     , megaparsec
+    , monad-loops
     , mtl
     , parsec
     , parser-combinators
@@ -60,6 +62,7 @@ executable main-exe
     , composition
     , containers
     , megaparsec
+    , monad-loops
     , mtl
     , parsec
     , parser-combinators
@@ -78,6 +81,7 @@ executable print-exe
     , composition
     , containers
     , megaparsec
+    , monad-loops
     , mtl
     , parsec
     , parser-combinators
@@ -96,6 +100,26 @@ executable term-to-prg-exe
     , composition
     , containers
     , megaparsec
+    , monad-loops
+    , mtl
+    , parsec
+    , parser-combinators
+    , transformers
+    , utility-ht
+  default-language: Haskell2010
+
+executable try-analyze-exe
+  main-is: TryAnalyze.hs
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Meta1
+    , base >=4.7 && <5
+    , composition
+    , containers
+    , megaparsec
+    , monad-loops
     , mtl
     , parsec
     , parser-combinators
@@ -119,6 +143,7 @@ test-suite Meta1-test
     , composition
     , containers
     , megaparsec
+    , monad-loops
     , mtl
     , parsec
     , parser-combinators

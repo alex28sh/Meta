@@ -19,6 +19,7 @@ label loopReadsNotFound:
     goto loopReads;
 
 label initDone:
+    _ := analyze_prg(Division, Blocks);
     Blocks match (C cons [Block, _]) goto initDone1 else stop;
 label initDone1:
     Block match (C Block [lab0, _, _]) goto initDone2 else ErrPattern;
@@ -33,7 +34,7 @@ label loopPending1:
     CurState match (C Pair [pp, vs]) goto loopPending2_0 else ErrPattern;
 label loopPending2_0:
     CurList := marked; 
-    CurFind := C Pair [pp, vs];
+    CurFind := get_label(pp, vs);
     CurRa := C loopPending2_1 [];
     goto lookup;
 label loopPending2_1:
@@ -154,7 +155,9 @@ label lookupBlockReturn2:
 label lookup:
     CurList match (C cons [CurElem, CurListTail]) goto lookupCheck else lookupFailed;
 label lookupCheck:
-    if CurFind == CurElem goto lookupSucceed else lookupNext;
+    CurElem match (C Pair [ppCur, vsCur]) goto lookupCheck1 else ErrPattern;
+label lookupCheck1:
+    if CurFind == get_label(ppCur, vsCur) goto lookupSucceed else lookupNext;
 label lookupNext:
     CurList := CurListTail;
     goto lookup;

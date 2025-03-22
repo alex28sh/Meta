@@ -29,6 +29,7 @@ dependencies:
 - mtl
 - composition
 - utility-ht
+- monad-loops
 
 ghc-options:
 - -Wall
@@ -69,6 +70,17 @@ executables:
 
   term-to-prg-exe:
     main:                TermToPrg.hs
+    other-modules:       []
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - Meta1
+
+  try-analyze-exe:
+    main:                TryAnalyze.hs
     other-modules:       []
     source-dirs:         app
     ghc-options:

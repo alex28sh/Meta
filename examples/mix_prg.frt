@@ -1,27 +1,16 @@
 read Right;
 
-label do_right_17:
-	Left := C cons [rx, Left];
-	Right := rest;
-	return Right;
-
-label ErrPattern8:
-	return C ErrPattern [];
-
 label do_goto23:
-	Right match C cons [rx, rest] goto do_right_17 else ErrPattern8;
+	Right match C cons [rx, rest] goto do_right_15 else ErrPattern2;
 
 label do_right_15:
 	Left := C cons [rx, Left];
 	Right := rest;
 	return Right;
 
-label ErrPattern6:
-	return C ErrPattern [];
-
 label loop4:
 	Right := C cons [C succ [C z []], Right];
-	Right match C cons [rx, rest] goto do_right_15 else ErrPattern6;
+	Right match C cons [rx, rest] goto do_right_15 else ErrPattern2;
 
 label do_if21:
 	if C z [] == ifx goto do_goto23 else loop4;

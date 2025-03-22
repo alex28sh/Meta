@@ -11,6 +11,7 @@ import Text.Read (readMaybe)
 
 import Control.Arrow (first)
 import Syntax
+import LivenessAnalysis (AnalyzedPrg, analyze)
 
 import Text.Megaparsec (runParser)
 import Parser (parseExpr)
@@ -20,7 +21,7 @@ type BlockMap = M.Map String Block
 type LabelCounter = Int
 type LabelMap = M.Map (String, Expr) LabelCounter
 
-type EvalM = StateT (VarMap, BlockMap, LabelMap, LabelCounter) (ExceptT Error IO)
+type EvalM = StateT (VarMap, BlockMap, LabelMap, LabelCounter, Maybe AnalyzedPrg) (ExceptT Error IO)
 
 data Error 
     = UndefinedVar String
@@ -32,18 +33,18 @@ data Error
 
 modifyVar :: String -> Expr -> EvalM ()
 modifyVar s e = do 
-    (vars, blocks, labels, counter) <- get 
-    put (M.insert s e vars, blocks, labels, counter)
+    (vars, blocks, labels, counter, an_prg) <- get 
+    put (M.insert s e vars, blocks, labels, counter, an_prg)
     
 getVar :: String -> EvalM Expr
 getVar s = do 
-    (vars, _, _, _) <- get 
+    (vars, _, _, _, _) <- get 
     when (M.notMember s vars) $ lift (throwE $ UndefinedVar s)
     return $ vars M.! s
 
 getBlock :: String -> EvalM Block
 getBlock s = do 
-    (_, blocks, _, _) <- get 
+    (_, blocks, _, _, _) <- get 
     when (M.notMember s blocks) $ lift (throwE $ UndefinedLabel s)
     return $ blocks M.! s
 
@@ -58,21 +59,42 @@ readSafe str =
 interAssign :: Stmt -> EvalM ()
 interAssign (Assignment v e) = evalExpr e >>= modifyVar v 
 
+reduce_vars :: Expr -> Expr -> Expr
+reduce_vars (C "nil" []) _ = C "nil" []
+reduce_vars init@(C "cons" [name, rest]) (C "cons" [C "Pair" [v, val], vs]) | name == v = C "cons" [C "Pair" [v, val], reduce_vars rest vs]
+                                                                            | otherwise = reduce_vars init vs
+
 getNewLabel :: String -> Expr -> EvalM String 
 getNewLabel lab vs = do 
-    (vars, blocks, labels, counter) <- get
-    if (M.member (lab, vs) labels) then
-        return $ lab ++ show (labels M.! (lab, vs))
-    else do
-        put (vars, blocks, M.insert (lab, vs) counter labels, counter + 1)  
-        return $ lab ++ show counter
+    (vars, blocks, labels, counter, an_prg_opt) <- get
+    case an_prg_opt of 
+        Nothing -> lift $ throwE $ ParsingErr "getNewLabel: analyzed program is not set"
+        Just an_prg -> do 
+            let vs_red = reduce_vars (an_prg M.! lab) vs
+            if (M.member (lab, vs_red) labels) then
+                return $ lab ++ show (labels M.! (lab, vs_red))
+            else do
+                put (vars, blocks, M.insert (lab, vs_red) counter labels, counter + 1, Just an_prg)  
+                return $ lab ++ show counter
 
+analyze_evalm :: Expr -> Expr -> EvalM ()
+analyze_evalm div blocks = do 
+    analyzed <- lift $ lift $ analyze div blocks
+    (vars, blocks, labels, counter, an_prg) <- get
+    put (vars, blocks, labels, counter, Just analyzed)    
 
 evalExpr :: Expr -> EvalM Expr
 evalExpr (V x) = getVar x 
 evalExpr (C name es) = 
     C name <$> mapM evalExpr es
 evalExpr (Call name es) 
+    | name == "analyze_prg" = do 
+        vals <- mapM evalExpr es 
+        when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
+        let div = head vals 
+        let blocks = vals !! 1
+        analyze_evalm div blocks 
+        return $ C "nil" []
     | name == "reduce" = do 
         vals <- mapM evalExpr es 
         when (length vals /= 2) $ lift $ throwE WrongNumberOfArgs
@@ -111,6 +133,8 @@ evalExpr (Call name es)
         let (C lab []) = head vals 
         let vs = vals !! 1
         label <- getNewLabel lab vs
+        -- lift $ lift $ putStrLn $ "label: " ++ label
+        -- lift $ lift $ print $ show vs
         return $ C "Block" [C label [], C "nil" []]
     | name == "get_label" = do 
         vals <- mapM evalExpr es 
@@ -203,13 +227,10 @@ reduce vs (C "Call" es) =
                     _ -> C name [label, assigns, stmt]
             | length es == 3 && head es == (C "initial_code" []) = 
                 undefined
-                -- let [lab, vs0] = map (reduce vs) $ tail es in
-                -- let label = getNewLabel lab vs0 in
-                -- C "Block" [C label [], C "nil" []]
             | length es == 3 && head es == (C "get_label" []) =
                 undefined
-                -- let [lab, v] = map (reduce vs) $ tail es in
-                -- getNewLabel lab v  
+            | length es == 2 && head es == (C "analyze_prg" []) =
+                undefined
             | length es == 4 && head es == (C "match_eval" []) =
                 let [e, vs0, v_val] = map (reduce vs) $ tail es in
                 match_eval vs0 (reduce vs0 v_val) e  
@@ -221,10 +242,6 @@ reduce vs (C "Call" es) =
                 else 
                     C "False" []
             | otherwise = error $ show es
-        -- find :: Expr -> Expr -> Expr 
-        -- find (C "cons" [C "Pair" [name, val], rest]) var@(C "var" [v]) | name == v = val 
-        --                                                                | otherwise = find rest var  
-        -- find _ _ = undefined 
 reduce vs (C name es) = 
     C name $ map (reduce vs) es
 reduce _ _ = undefined
@@ -260,7 +277,7 @@ interRead (ReadI s) =
     (lift (lift $ putStrLn ("input value for " ++ s) >> getLine) >>= readSafe) >>= modifyVar s
 
 interBlock :: Block -> EvalM Expr
-interBlock (Block (Label label) assigns jump) = -- (getVar "Left" >>= \s -> lift $ lift $ when (label == "loop") $ print s) >> 
+interBlock (Block (Label label) assigns jump) = -- (lift $ lift $ print label) >> -- (getVar "Left" >>= \s -> lift $ lift $ when (label == "loop") $ print s) >> 
     mapM_ interAssign assigns >> interJump jump
 
 interProg :: Program -> EvalM Expr
@@ -268,7 +285,7 @@ interProg (Program reads blocks) = mapM_ interRead reads >> interBlock (head blo
 
 interProgTop :: Program -> IO ()
 interProgTop pr@(Program _ blocks) = do 
-    result <- runExceptT (evalStateT (interProg pr) (M.empty, M.fromList $ map (\b@(Block (Label label) _ _) -> (label, b)) blocks, M.empty, 0))
+    result <- runExceptT (evalStateT (interProg pr) (M.empty, M.fromList $ map (\b@(Block (Label label) _ _) -> (label, b)) blocks, M.empty, 0, Nothing))
     case result of
         Left err -> print err
         Right x -> putStrLn $ printf "Result: %s" (show x)

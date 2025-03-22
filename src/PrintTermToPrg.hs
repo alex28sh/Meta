@@ -1,6 +1,6 @@
 module PrintTermToPrg (printTermToPrg) where
 
-import Data.List (intercalate)
+import Data.List (intercalate, isSuffixOf)
 import Syntax
 
 printTermToPrg :: Expr -> String
@@ -19,7 +19,8 @@ printTermToRead :: Expr -> String
 printTermToRead (C "ReadI" [v]) = "read " ++ printTermToVar v ++ ";\n"
 
 printTermToVar :: Expr -> String
-printTermToVar (C "var" [C name []]) = name
+printTermToVar (C "var" [C name []]) | isSuffixOf "spec" name = "C var [C " ++ name ++ " []]"
+                                     | otherwise = name
 
 printTermToBlock :: Expr -> String
 printTermToBlock (C "Block" [C label [], assigns, jump]) = 
