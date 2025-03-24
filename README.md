@@ -28,5 +28,7 @@ Which is encoded by:
 `C cons [C ifI [C z [], C succ [C succ [C zero []]]], C cons [C write [C succ [C z []]], C cons [C right [], C nil []]]]`
 
 How to run: 
-    `cat /examples/proj1/mix_input.frt | stack run main-exe` - will run specializer 
-    `cat /examples/proj1/mix_output.frt | stack run term-to-prg-exe` - will convert weird output term into a program
+
+`cat /examples/proj1/mix_input.frt | stack run main-exe` - will run specializer 
+
+`cat /examples/proj1/mix_output.frt | stack run term-to-prg-exe` - will convert weird output term into a program
