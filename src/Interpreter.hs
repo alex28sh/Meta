@@ -68,7 +68,12 @@ getNewLabel :: String -> Expr -> EvalM String
 getNewLabel lab vs = do 
     (vars, blocks, labels, counter, an_prg_opt) <- get
     case an_prg_opt of 
-        Nothing -> lift $ throwE $ ParsingErr "getNewLabel: analyzed program is not set"
+        Nothing -> 
+            if (M.member (lab, vs) labels) then
+                return $ lab ++ show (labels M.! (lab, vs))
+            else do
+                put (vars, blocks, M.insert (lab, vs) counter labels, counter + 1, Nothing)  
+                return $ lab ++ show counter
         Just an_prg -> do 
             let vs_red = reduce_vars (an_prg M.! lab) vs
             if (M.member (lab, vs_red) labels) then

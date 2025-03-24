@@ -2,7 +2,7 @@ module LivenessAnalysis where
 
 import Syntax
 import qualified Data.Map as M
-import Control.Monad.Loops (untilM_)
+import Control.Monad.Loops (untilM_, whileM_)
 import Control.Monad.State
     ( modify, evalStateT, MonadState(get, put), MonadTrans(lift), StateT, State, 
       execState, execStateT )
@@ -64,7 +64,7 @@ get_links blocks = M.unionsWith (++) $ map helper blocks ++ map helper1 blocks
 
 analyzeLoop :: AnalM ()
 analyzeLoop = 
-    untilM_ (getBlock >>= analyzeBlock) untilExprM
+    whileM_ untilExprM (getBlock >>= analyzeBlock) 
 
 type VarsMap = M.Map String Int
 type AnalysisMap = M.Map String [Bool]
@@ -85,7 +85,7 @@ getBlock = do
 untilExprM :: AnalM Bool
 untilExprM = do 
     (_, _, _, _, bs) <- get
-    return $ bs == []
+    return $ bs /= []
 
 analyzeJump :: Jump -> AnalysisMap -> AnalM [Bool]
 analyzeJump (Goto s) analyzed = do 
@@ -149,15 +149,16 @@ analyzeAssigns (Assignment v e : rest) =
     analyzeAssigns rest >> analyzeCur  
     where 
         analyzeCur :: State (VarsMap, [Bool]) ()
-        analyzeCur = do 
-            analyzeExpr e
-            (varsMap, vars) <- get
-            if (not $ M.member v varsMap)
-            then 
-                return () 
-            else do 
-                let u = varsMap M.! v
-                put (varsMap, updateList u False vars)
+        analyzeCur = (
+            do 
+                (varsMap, vars) <- get
+                if (not $ M.member v varsMap)
+                then 
+                    return () 
+                else do 
+                    let u = varsMap M.! v
+                    put (varsMap, updateList u False vars)
+            ) >> analyzeExpr e
 
 analyzeBlock :: Block -> AnalM () 
 analyzeBlock (Block (Label label) assigns jump) = do 
